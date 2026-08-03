@@ -12,3 +12,5 @@ node_modules/
 
 # Environment
 .env
+
+docs/System Architecture.drawio
