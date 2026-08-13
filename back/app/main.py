@@ -1,8 +1,8 @@
 from datetime import datetime
+from sqlalchemy import select
 from fastapi import FastAPI
-from pydantic import BaseModel
-from app.database import NoteModel, Session
-
+from pydantic import BaseModel, ConfigDict
+from app.database import NoteModel, SessionDep
 
 class NoteRequest(BaseModel):
     title: str
@@ -13,6 +13,8 @@ class Note(BaseModel):
     title: str
     content: str
     created_at: str
+
+    model_config = ConfigDict(from_attributes=True)
 
 app = FastAPI()
 
@@ -31,11 +33,15 @@ async def read_info():
 async def read_health():
     return {"status": "healthy"}
 
-@app.post("/notes")
-async def create_note(note: NoteRequest):
-    with Session() as session:
-        new_note = NoteModel(title=note.title, content=note.content, created_at=datetime.now().isoformat())
-        session.add(new_note)
-        session.commit()
-        session.refresh(new_note)
-    return {"id": new_note.id, "title": new_note.title, "content": new_note.content, "created_at": new_note.created_at}
+@app.post("/notes", response_model=Note)
+async def create_note(note: NoteRequest, session: SessionDep):
+    new_note = NoteModel(title=note.title, content=note.content, created_at=datetime.now().isoformat())
+    session.add(new_note)
+    session.commit()
+    session.refresh(new_note)
+    return Note.model_validate(new_note)
+
+@app.get("/notes", response_model=list[Note])
+async def get_notes(session: SessionDep) -> list[Note]:
+    notes = session.execute(select(NoteModel)).scalars().all()
+    return [Note.model_validate(note) for note in notes]
