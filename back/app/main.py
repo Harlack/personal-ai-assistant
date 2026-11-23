@@ -1,24 +1,18 @@
-from datetime import datetime
-from fastapi import HTTPException, FastAPI
-from app.notes.service import NotesServiceDep
-from sqlalchemy import select
-from pydantic import BaseModel, ConfigDict, Field
-from app.database import NoteModel, SessionDep
-
-class NoteRequest(BaseModel):
-    title: str = Field(..., min_length=1, max_length=30)
-    content: str = Field(..., min_length=1, max_length=3000)
-        
-
-class Note(BaseModel): 
-    id: int
-    title: str
-    content: str
-    created_at: str
-
-    model_config = ConfigDict(from_attributes=True)
+from fastapi import FastAPI
+from app.notes.router import router
+from app.notes.exceptions import NoteNotFoundException
+from fastapi.responses import JSONResponse
 
 app = FastAPI()
+app.include_router(router)
+
+
+@app.exception_handler(NoteNotFoundException)
+async def note_not_found_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=404,
+        content={"detail": str(exc)}
+    )
 
 @app.get("/")
 async def read_root():
@@ -35,36 +29,3 @@ async def read_info():
 async def read_health():
     return {"status": "healthy"}
 
-@app.post("/notes", response_model=Note)
-async def create_note(note: NoteRequest, service: NotesServiceDep):
-    new_note = NoteModel(title=note.title, content=note.content, created_at=datetime.now().isoformat())
-    note = service.create_note(new_note)
-    return Note.model_validate(note)
-
-@app.get("/notes", response_model=list[Note])
-async def get_notes(service: NotesServiceDep) -> list[Note]:
-    notes = service.get_all_notes()
-    return [Note.model_validate(note) for note in notes]
-
-@app.get("/notes/{note_id}", response_model=Note)
-async def get_note(note_id: int, service: NotesServiceDep):
-    note = service.get_note_by_id(note_id)
-    if not note:
-        raise HTTPException(status_code=404, detail="Note not found")
-    return Note.model_validate(note)
-
-@app.put("/notes/{note_id}", response_model=Note)
-async def update_note(note_id: int, note_request: NoteRequest, service: NotesServiceDep):
-    updated_note = NoteModel(title=note_request.title, content=note_request.content)
-    note = service.update_note(note_id, updated_note)
-    if not note:
-        raise HTTPException(status_code=404, detail="Note not found")
-    return Note.model_validate(note)
-
-@app.delete("/notes/{note_id}")
-async def delete_note(note_id: int, service: NotesServiceDep):
-    note = service.get_note_by_id(note_id)
-    if not note:
-        raise HTTPException(status_code=404, detail="Note not found")
-    result = service.delete_note(note_id)
-    return "Note deleted successfully" if result else "Failed to delete note"

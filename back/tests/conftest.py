@@ -6,6 +6,8 @@ from app.database import Base, get_session
 from fastapi.testclient import TestClient
 import pytest
 
+
+
 @pytest.fixture
 def client(clear_database):
     app.dependency_overrides[get_session] = override_get_session
